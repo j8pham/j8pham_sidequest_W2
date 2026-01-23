@@ -78,7 +78,7 @@ function generateLevel() {
     // Random hazards (spikes or monsters) - lower frequency for reachability
     // Don't spawn hazards in first 3 depth levels
     if (depth >= 3) {
-      if (random() < 0.12) {
+      if (random() < 0.18) {
         spikes.push({
           x: platformX + random(10, platformWidth - 10),
           y: yPos - 12,
@@ -86,7 +86,7 @@ function generateLevel() {
         });
       }
 
-      if (random() < 0.08) {
+      if (random() < 0.12) {
         let monsterX = platformX + platformWidth / 2;
         monsters.push({
           x: monsterX,
@@ -102,11 +102,11 @@ function generateLevel() {
     }
 
     // Add collectible blob
-    if (random() < 0.45) {
+    if (random() < 0.3) {
       collectibleBlobs.push({
         x: platformX + random(10, platformWidth - 10),
-        y: yPos - 25,
-        vx: random(-0.5, 0.5),
+        y: yPos - 12,
+        vx: 0,
         vy: 0,
         w: 8,
         h: 8,
@@ -253,7 +253,7 @@ function draw() {
     // Add hazards to new platform (lower chance)
     // Don't spawn hazards in first 3 depth levels
     if (depth >= 3) {
-      if (random() < 0.12) {
+      if (random() < 0.18) {
         spikes.push({
           x: platformX + random(10, platformWidth - 10),
           y: newY - 12,
@@ -261,7 +261,7 @@ function draw() {
         });
       }
 
-      if (random() < 0.08) {
+      if (random() < 0.12) {
         let monsterX = platformX + platformWidth / 2;
         monsters.push({
           x: monsterX,
@@ -276,11 +276,11 @@ function draw() {
       }
     }
 
-    if (random() < 0.45) {
+    if (random() < 0.3) {
       collectibleBlobs.push({
         x: platformX + random(10, platformWidth - 10),
-        y: newY - 25,
-        vx: random(-0.5, 0.5),
+        y: newY - 12,
+        vx: 0,
         vy: 0,
         w: 8,
         h: 8,
@@ -306,15 +306,7 @@ function draw() {
   for (let i = collectibleBlobs.length - 1; i >= 0; i--) {
     const c = collectibleBlobs[i];
 
-    if (!c.falling) {
-      c.vy = 0;
-    } else {
-      c.vy += 0.3;
-    }
-
-    c.x += c.vx;
-    c.y += c.vy;
-
+    // Check collision with player
     if (
       blob.x < c.x + c.w &&
       blob.x + blob.w > c.x &&
@@ -332,11 +324,8 @@ function draw() {
       continue;
     }
 
-    if (c.y > -50) {
-      c.falling = true;
-    }
-
-    if (c.y > height + 100) {
+    // Remove if off-screen
+    if (c.y > cameraY + height + 100) {
       collectibleBlobs.splice(i, 1);
     }
   }
@@ -473,16 +462,33 @@ function draw() {
     fill(255, 255, 50);
     text("^ JUMP! ^", 10, 50);
   }
+
+  // Mischief mode HUD
   if (blob.hasMischief) {
-    fill(255, 150, 50);
-    text(">> MISCHIEF <<", 10, 50);
+    fill(255, 100, 200);
+    textAlign(RIGHT);
+    textSize(12);
+    text(">> MISCHIEF <<", width - 10, 20);
+    fill(200, 200, 200);
+    textSize(10);
+    text("BREAK SPIKES", width - 10, 33);
+    text("KNOCK MONSTERS", width - 10, 45);
+
+    // Calculate remaining time in seconds
+    let timeRemaining = ceil(blob.mischiefTimer / 60);
+    fill(255, 100, 200);
+    textSize(12);
+    text("TIME: " + timeRemaining + "s", width - 10, 60);
+    textAlign(LEFT);
   }
 }
 
 // Draw arcade-style pixelated blob
 function drawArcadeBlob(b) {
   // Determine color based on depth and excitement
-  if (b.excitedTimer > 0) {
+  if (b.hasMischief) {
+    fill(255, 100, 200); // Bright magenta when in mischief state
+  } else if (b.excitedTimer > 0) {
     fill(255, 255, 100); // Bright yellow when excited
   } else if (b.anxietyTimer > 0) {
     // Darker as you go deeper
@@ -520,8 +526,14 @@ function drawArcadeBlob(b) {
     arc(b.x, b.y + 4, 6, 4, 0, PI);
   }
 
-  // Draw anxiety jitter lines
-  if (b.anxietyTimer > 0 && b.anxietyTimer % 10 < 5) {
+  // Draw evil smile in mischief state
+  if (b.hasMischief) {
+    fill(255);
+    arc(b.x, b.y + 4, 6, 4, PI, 0); // Upside down smile (evil)
+  }
+
+  // Draw anxiety jitter lines (but not in mischief state)
+  if (b.anxietyTimer > 0 && b.anxietyTimer % 10 < 5 && !b.hasMischief) {
     stroke(255, 100, 100);
     strokeWeight(1);
     line(
