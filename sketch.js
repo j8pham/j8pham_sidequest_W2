@@ -1,0 +1,520 @@
+// Game state
+let score = 0;
+let depth = 0; // How far down in the dungeon
+let gameOver = false;
+let gameOverReason = "";
+let gameStarted = false;
+
+// Player character - retro arcade blob
+let blob = {
+  x: 320,
+  y: 30,
+  w: 20,
+  h: 20,
+  vx: 0,
+  vy: 0,
+  speed: 2.5,
+  gravity: 0.35,
+  jumpPower: -8,
+  onPlatform: false,
+  excitedTimer: 0,
+  anxietyTimer: 0,
+  anxietyCount: 0,
+  hasMischief: false,
+  mischiefTimer: 0,
+  colorDepth: 0,
+};
+
+// Collectible blobs
+let collectibleBlobs = [];
+
+// Spike traps
+let spikes = [];
+
+// Moving monsters (arcade style patrol)
+let monsters = [];
+
+// List of solid platforms
+let platforms = [];
+
+function setup() {
+  createCanvas(640, 360);
+
+  // Retro arcade style - pixelated
+  pixelDensity(1);
+  noStroke();
+  textFont("monospace");
+  textSize(12);
+
+  generateLevel();
+  // Start blob on the first platform
+  blob.y = platforms[0].y - blob.h;
+  blob.vy = 0;
+  blob.onPlatform = true;
+}
+
+function generateLevel() {
+  platforms = [];
+  collectibleBlobs = [];
+  spikes = [];
+  monsters = [];
+
+  let yPos = 80; // Start first platform near top so blob can stand on it
+
+  // Generate initial set of platforms
+  for (let i = 0; i < 20; i++) {
+    let platformWidth = random(60, 140);
+    let platformX = random(10, width - platformWidth - 10);
+
+    platforms.push({
+      x: platformX,
+      y: yPos,
+      w: platformWidth,
+      h: 10,
+      visited: false,
+    });
+
+    // Random hazards (spikes or monsters)
+    if (random() < 0.15) {
+      spikes.push({
+        x: platformX + random(10, platformWidth - 10),
+        y: yPos - 12,
+        size: 5,
+      });
+    }
+
+    if (random() < 0.1) {
+      let monsterX = platformX + platformWidth / 2;
+      monsters.push({
+        x: monsterX,
+        y: yPos - 20,
+        w: 16,
+        h: 16,
+        speed: 1 + (depth / 50) * 0.3,
+        direction: random() < 0.5 ? 1 : -1,
+        minX: max(20, platformX - 60),
+        maxX: min(width - 20, platformX + platformWidth + 60),
+      });
+    }
+
+    // Add collectible blob
+    if (random() < 0.3) {
+      collectibleBlobs.push({
+        x: platformX + random(10, platformWidth - 10),
+        y: yPos - 25,
+        vx: random(-0.5, 0.5),
+        vy: 0,
+        w: 8,
+        h: 8,
+        isMischief: random() < 0.12,
+        falling: false,
+      });
+    }
+
+    yPos += random(45, 70);
+  }
+}
+
+function draw() {
+  // Retro arcade background
+  background(10, 15, 40);
+
+  // Start screen
+  if (!gameStarted) {
+    fill(100, 255, 100);
+    textAlign(CENTER, CENTER);
+    textSize(32);
+    text("DUNGEON DROP", width / 2, height / 2 - 80);
+
+    fill(200);
+    textSize(16);
+    text("Press SPACE to start", width / 2, height / 2 - 10);
+
+    // Controls in bottom right
+    fill(150, 255, 100);
+    textSize(12);
+    textAlign(RIGHT);
+    text("A / LEFT - Move Left", width - 20, height - 80);
+    text("D / RIGHT - Move Right", width - 20, height - 60);
+    text("SPACE / W / UP - Jump", width - 20, height - 40);
+    text("R - Restart", width - 20, height - 20);
+    return;
+  }
+
+  if (gameOver) {
+    fill(255, 50, 50);
+    textAlign(CENTER, CENTER);
+    textSize(24);
+    text("GAME OVER", width / 2, height / 2 - 40);
+    textSize(14);
+    fill(200);
+    text("Score: " + score, width / 2, height / 2);
+    text("Depth: " + depth, width / 2, height / 2 + 20);
+    text("Press R to restart", width / 2, height / 2 + 50);
+    return;
+  }
+
+  // --- Player input ---
+  blob.vx = 0;
+  if (keyIsDown(65) || keyIsDown(LEFT_ARROW)) blob.vx = -blob.speed;
+  if (keyIsDown(68) || keyIsDown(RIGHT_ARROW)) blob.vx = blob.speed;
+
+  blob.x += blob.vx;
+  blob.x = constrain(blob.x, 0, width - blob.w);
+
+  // --- Apply gravity ---
+  blob.vy += blob.gravity;
+
+  // --- Platform collision ---
+  blob.onPlatform = false;
+  for (const p of platforms) {
+    if (
+      blob.y + blob.h <= p.y + 5 &&
+      blob.y + blob.h + blob.vy >= p.y &&
+      blob.x < p.x + p.w &&
+      blob.x + blob.w > p.x
+    ) {
+      blob.y = p.y - blob.h;
+      blob.vy = 0;
+      blob.onPlatform = true;
+
+      if (!p.visited) {
+        p.visited = true;
+        depth++;
+        blob.colorDepth = depth;
+        blob.anxietyTimer = 120;
+      }
+      break;
+    }
+  }
+
+  // --- Apply velocity ---
+  blob.y += blob.vy;
+
+  // --- Generate new platforms at bottom when needed ---
+  const bottomMostPlatform = platforms.reduce((lowest, p) =>
+    p.y > lowest.y ? p : lowest,
+  );
+  if (bottomMostPlatform.y < height + 200) {
+    let newY = bottomMostPlatform.y + random(45, 70);
+    let platformWidth = random(60, 140);
+    let platformX = random(10, width - platformWidth - 10);
+
+    platforms.push({
+      x: platformX,
+      y: newY,
+      w: platformWidth,
+      h: 10,
+      visited: false,
+    });
+
+    // Add hazards to new platform
+    if (random() < 0.15) {
+      spikes.push({
+        x: platformX + random(10, platformWidth - 10),
+        y: newY - 12,
+        size: 5,
+      });
+    }
+
+    if (random() < 0.1) {
+      let monsterX = platformX + platformWidth / 2;
+      monsters.push({
+        x: monsterX,
+        y: newY - 20,
+        w: 16,
+        h: 16,
+        speed: 1 + (depth / 50) * 0.3,
+        direction: random() < 0.5 ? 1 : -1,
+        minX: max(20, platformX - 60),
+        maxX: min(width - 20, platformX + platformWidth + 60),
+      });
+    }
+
+    if (random() < 0.3) {
+      collectibleBlobs.push({
+        x: platformX + random(10, platformWidth - 10),
+        y: newY - 25,
+        vx: random(-0.5, 0.5),
+        vy: 0,
+        w: 8,
+        h: 8,
+        isMischief: random() < 0.12,
+        falling: false,
+      });
+    }
+  }
+
+  // --- Remove platforms that are off-screen above ---
+  platforms = platforms.filter((p) => p.y < height + 100);
+  spikes = spikes.filter((s) => s.y < height + 100);
+  monsters = monsters.filter((m) => m.y < height + 100);
+
+  // --- Check if fell off bottom ---
+  if (blob.y > height + 50) {
+    gameOver = true;
+    gameOverReason = "Fell into the abyss!";
+  }
+
+  // --- Update collectible blobs ---
+  for (let i = collectibleBlobs.length - 1; i >= 0; i--) {
+    const c = collectibleBlobs[i];
+
+    if (!c.falling) {
+      c.vy = 0;
+    } else {
+      c.vy += 0.3;
+    }
+
+    c.x += c.vx;
+    c.y += c.vy;
+
+    if (
+      blob.x < c.x + c.w &&
+      blob.x + blob.w > c.x &&
+      blob.y < c.y + c.h &&
+      blob.y + blob.h > c.y
+    ) {
+      if (c.isMischief) {
+        blob.hasMischief = true;
+        blob.mischiefTimer = 300;
+        score += 50;
+      } else {
+        score += 10;
+      }
+      collectibleBlobs.splice(i, 1);
+      continue;
+    }
+
+    if (c.y > -50) {
+      c.falling = true;
+    }
+
+    if (c.y > height + 100) {
+      collectibleBlobs.splice(i, 1);
+    }
+  }
+
+  // --- Update mischief mode ---
+  if (blob.hasMischief) {
+    blob.mischiefTimer--;
+    if (blob.mischiefTimer <= 0) {
+      blob.hasMischief = false;
+    }
+
+    for (let i = spikes.length - 1; i >= 0; i--) {
+      if (
+        blob.x < spikes[i].x + 14 &&
+        blob.x + blob.w > spikes[i].x - 14 &&
+        blob.y < spikes[i].y + 14 &&
+        blob.y + blob.h > spikes[i].y - 14
+      ) {
+        spikes.splice(i, 1);
+      }
+    }
+  }
+
+  // --- Update monsters ---
+  for (let i = monsters.length - 1; i >= 0; i--) {
+    const m = monsters[i];
+    m.x += m.speed * m.direction;
+    if (m.x < m.minX || m.x > m.maxX) {
+      m.direction *= -1;
+    }
+
+    if (
+      blob.x < m.x + m.w &&
+      blob.x + blob.w > m.x &&
+      blob.y < m.y + m.h &&
+      blob.y + blob.h > m.y
+    ) {
+      if (blob.hasMischief) {
+        m.direction *= -1;
+      } else {
+        gameOver = true;
+        gameOverReason = "Hit by monster!";
+      }
+    }
+
+    if (m.y > height + 100) {
+      monsters.splice(i, 1);
+    }
+  }
+
+  // --- Check spike collision ---
+  for (const s of spikes) {
+    if (
+      !blob.hasMischief &&
+      blob.x < s.x + 12 &&
+      blob.x + blob.w > s.x - 12 &&
+      blob.y < s.y + 12 &&
+      blob.y + blob.h > s.y - 12
+    ) {
+      gameOver = true;
+      gameOverReason = "Hit a spike!";
+    }
+  }
+
+  // --- Draw platforms ---
+  fill(50, 200, 100);
+  for (const p of platforms) {
+    rect(p.x, p.y, p.w, p.h);
+    fill(100, 255, 150);
+    rect(p.x, p.y, p.w, 2);
+    fill(50, 200, 100);
+  }
+
+  // --- Draw spikes ---
+  fill(255, 100, 100);
+  for (const s of spikes) {
+    triangle(
+      s.x - s.size,
+      s.y + s.size,
+      s.x + s.size,
+      s.y + s.size,
+      s.x,
+      s.y - s.size,
+    );
+  }
+
+  // --- Draw monsters ---
+  fill(200, 50, 100);
+  for (const m of monsters) {
+    rect(m.x - m.w / 2, m.y - m.h / 2, m.w, m.h);
+    fill(255);
+    rect(m.x - 6, m.y - 4, 4, 4);
+    rect(m.x + 2, m.y - 4, 4, 4);
+    fill(0);
+    if (m.direction > 0) {
+      rect(m.x - 5, m.y - 3, 2, 2);
+      rect(m.x + 3, m.y - 3, 2, 2);
+    } else {
+      rect(m.x - 4, m.y - 3, 2, 2);
+      rect(m.x + 4, m.y - 3, 2, 2);
+    }
+  }
+
+  // --- Draw collectible blobs ---
+  for (const c of collectibleBlobs) {
+    if (c.isMischief) {
+      fill(50, 20, 80);
+    } else {
+      fill(255, 255, 50);
+    }
+    rect(c.x - c.w / 2, c.y - c.h / 2, c.w, c.h);
+  }
+
+  // --- Update anxiety animation ---
+  if (blob.anxietyTimer > 0) {
+    blob.anxietyTimer--;
+  }
+
+  // --- Draw player blob ---
+  drawArcadeBlob(blob);
+
+  // --- HUD ---
+  fill(100, 255, 100);
+  textAlign(LEFT);
+  textSize(12);
+  text("SCORE: " + score, 10, 20);
+  text("DEPTH: " + depth, 10, 35);
+  if (blob.excitedTimer > 0) {
+    fill(255, 255, 50);
+    text("^ JUMP! ^", 10, 50);
+  }
+  if (blob.hasMischief) {
+    fill(255, 150, 50);
+    text(">> MISCHIEF <<", 10, 50);
+  }
+}
+
+// Draw arcade-style pixelated blob
+function drawArcadeBlob(b) {
+  // Determine color based on depth and excitement
+  if (b.excitedTimer > 0) {
+    fill(255, 255, 100); // Bright yellow when excited
+  } else if (b.anxietyTimer > 0) {
+    // Darker as you go deeper
+    let colorShift = min(depth / 50, 1);
+    fill(150 - colorShift * 100, 200 - colorShift * 50, 100 + colorShift * 100);
+  } else {
+    // Base color shifts from cyan to purple
+    let colorShift = min(depth / 50, 1);
+    fill(100 - colorShift * 50, 200 - colorShift * 100, 200 + colorShift * 55);
+  }
+
+  // Draw main blob body (simple square for retro)
+  rect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
+
+  // Draw eyes
+  fill(255);
+  rect(b.x - 6, b.y - 6, 4, 4);
+  rect(b.x + 2, b.y - 6, 4, 4);
+
+  fill(0);
+  if (b.vx > 0) {
+    rect(b.x - 4, b.y - 4, 2, 2);
+    rect(b.x + 4, b.y - 4, 2, 2);
+  } else if (b.vx < 0) {
+    rect(b.x - 6, b.y - 4, 2, 2);
+    rect(b.x + 2, b.y - 4, 2, 2);
+  } else {
+    rect(b.x - 5, b.y - 4, 2, 2);
+    rect(b.x + 3, b.y - 4, 2, 2);
+  }
+
+  // Draw smile on jump excitement
+  if (b.excitedTimer > 0) {
+    fill(255);
+    arc(b.x, b.y + 4, 6, 4, 0, PI);
+  }
+
+  // Draw anxiety jitter lines
+  if (b.anxietyTimer > 0 && b.anxietyTimer % 10 < 5) {
+    stroke(255, 100, 100);
+    strokeWeight(1);
+    line(
+      b.x - b.w / 2 - 2,
+      b.y - b.h / 2,
+      b.x - b.w / 2 - 5,
+      b.y - b.h / 2 - 3,
+    );
+    line(
+      b.x + b.w / 2 + 2,
+      b.y - b.h / 2,
+      b.x + b.w / 2 + 5,
+      b.y - b.h / 2 - 3,
+    );
+    noStroke();
+  }
+}
+
+// Jump input
+function keyPressed() {
+  // Start game with SPACE
+  if (!gameStarted && key === " ") {
+    gameStarted = true;
+    return;
+  }
+
+  if (
+    (key === " " || key === "W" || key === "w" || keyCode === UP_ARROW) &&
+    blob.vy === 0
+  ) {
+    blob.vy = -7;
+    blob.jumping = true;
+    blob.excitedTimer = 20; // Excitement lasts 20 frames
+  }
+
+  // Restart with R
+  if (key === "R" || key === "r") {
+    if (gameOver) {
+      score = 0;
+      depth = 0;
+      gameOver = false;
+      gameStarted = false;
+      gameOverReason = "";
+      setup();
+    }
+  }
+}
