@@ -120,8 +120,23 @@ function generateLevel() {
 }
 
 function draw() {
-  // Retro arcade background
-  background(10, 15, 40);
+  // Retro arcade background - changes with depth and mischief mode
+  if (blob.hasMischief) {
+    // Mischief mode - purple/magenta background
+    background(60, 10, 50);
+  } else if (depth >= 30) {
+    // Deep dungeon - dark red
+    background(40, 10, 15);
+  } else if (depth >= 20) {
+    // Deeper dungeon - dark purple
+    background(25, 10, 35);
+  } else if (depth >= 10) {
+    // Deeper - darker blue
+    background(10, 10, 50);
+  } else {
+    // Normal dungeon start
+    background(10, 15, 40);
+  }
 
   // Start screen
   if (!gameStarted) {
@@ -198,8 +213,9 @@ function draw() {
   // --- Update camera to follow blob ---
   cameraY = blob.y - height * 0.3; // Keep blob at upper third of screen
 
-  // --- Apply gravity ---
-  blob.vy += blob.gravity;
+  // --- Apply gravity (increases with depth for difficulty scaling) ---
+  let currentGravity = blob.gravity + depth * 0.01;
+  blob.vy += currentGravity;
 
   // --- Platform collision ---
   blob.onPlatform = false;
