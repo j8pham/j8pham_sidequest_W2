@@ -62,10 +62,10 @@ function generateLevel() {
 
   let yPos = 80; // Start first platform near top so blob can stand on it
 
-  // Generate initial set of platforms
-  for (let i = 0; i < 20; i++) {
-    let platformWidth = random(60, 140);
-    let platformX = random(10, width - platformWidth - 10);
+  // Generate initial set of platforms with consistent spacing
+  for (let i = 0; i < 25; i++) {
+    let platformWidth = random(70, 130);
+    let platformX = random(20, width - platformWidth - 20); // Keep centered
 
     platforms.push({
       x: platformX,
@@ -75,8 +75,8 @@ function generateLevel() {
       visited: false,
     });
 
-    // Random hazards (spikes or monsters)
-    if (random() < 0.15) {
+    // Random hazards (spikes or monsters) - lower frequency for reachability
+    if (random() < 0.12) {
       spikes.push({
         x: platformX + random(10, platformWidth - 10),
         y: yPos - 12,
@@ -84,7 +84,7 @@ function generateLevel() {
       });
     }
 
-    if (random() < 0.1) {
+    if (random() < 0.08) {
       let monsterX = platformX + platformWidth / 2;
       monsters.push({
         x: monsterX,
@@ -99,7 +99,7 @@ function generateLevel() {
     }
 
     // Add collectible blob
-    if (random() < 0.3) {
+    if (random() < 0.25) {
       collectibleBlobs.push({
         x: platformX + random(10, platformWidth - 10),
         y: yPos - 25,
@@ -112,7 +112,7 @@ function generateLevel() {
       });
     }
 
-    yPos += random(45, 70);
+    yPos += random(55, 65); // Consistent spacing for jumpable distances
   }
 }
 
@@ -196,13 +196,18 @@ function draw() {
   blob.y += blob.vy;
 
   // --- Generate new platforms at bottom when needed ---
+  // Check if there's enough platforms visible on screen
+  const platformsInView = platforms.filter(
+    (p) => p.y > cameraY - 50 && p.y < cameraY + height + 100,
+  );
   const bottomMostPlatform = platforms.reduce((lowest, p) =>
     p.y > lowest.y ? p : lowest,
   );
-  if (bottomMostPlatform.y < height + 200) {
-    let newY = bottomMostPlatform.y + random(45, 70);
-    let platformWidth = random(60, 140);
-    let platformX = random(10, width - platformWidth - 10);
+
+  if (platformsInView.length < 6 || bottomMostPlatform.y < cameraY + height) {
+    let newY = bottomMostPlatform.y + random(55, 65); // Consistent platform spacing
+    let platformWidth = random(70, 130);
+    let platformX = random(20, width - platformWidth - 20); // Keep platforms centered
 
     platforms.push({
       x: platformX,
@@ -212,8 +217,8 @@ function draw() {
       visited: false,
     });
 
-    // Add hazards to new platform
-    if (random() < 0.15) {
+    // Add hazards to new platform (lower chance)
+    if (random() < 0.12) {
       spikes.push({
         x: platformX + random(10, platformWidth - 10),
         y: newY - 12,
@@ -221,7 +226,7 @@ function draw() {
       });
     }
 
-    if (random() < 0.1) {
+    if (random() < 0.08) {
       let monsterX = platformX + platformWidth / 2;
       monsters.push({
         x: monsterX,
@@ -235,7 +240,7 @@ function draw() {
       });
     }
 
-    if (random() < 0.3) {
+    if (random() < 0.25) {
       collectibleBlobs.push({
         x: platformX + random(10, platformWidth - 10),
         y: newY - 25,
@@ -249,13 +254,14 @@ function draw() {
     }
   }
 
-  // --- Remove platforms that are off-screen above ---
-  platforms = platforms.filter((p) => p.y < height + 100);
-  spikes = spikes.filter((s) => s.y < height + 100);
-  monsters = monsters.filter((m) => m.y < height + 100);
+  // --- Remove platforms that are far above camera ---
+  platforms = platforms.filter((p) => p.y > cameraY - 100);
+  spikes = spikes.filter((s) => s.y > cameraY - 100);
+  monsters = monsters.filter((m) => m.y > cameraY - 100);
+  collectibleBlobs = collectibleBlobs.filter((c) => c.y > cameraY - 100);
 
   // --- Check if fell off bottom ---
-  if (blob.y > height + 50) {
+  if (blob.y > cameraY + height + 100) {
     gameOver = true;
     gameOverReason = "Fell into the abyss!";
   }
