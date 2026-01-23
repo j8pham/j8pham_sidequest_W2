@@ -4,6 +4,7 @@ let depth = 0; // How far down in the dungeon
 let gameOver = false;
 let gameOverReason = "";
 let gameStarted = false;
+let cameraY = 0; // Camera position for scrolling
 
 // Player character - retro arcade blob
 let blob = {
@@ -161,6 +162,9 @@ function draw() {
 
   blob.x += blob.vx;
   blob.x = constrain(blob.x, 0, width - blob.w);
+
+  // --- Update camera to follow blob ---
+  cameraY = blob.y - height * 0.3; // Keep blob at upper third of screen
 
   // --- Apply gravity ---
   blob.vy += blob.gravity;
@@ -356,6 +360,9 @@ function draw() {
   }
 
   // --- Draw platforms ---
+  push();
+  translate(0, -cameraY);
+
   fill(50, 200, 100);
   for (const p of platforms) {
     rect(p.x, p.y, p.w, p.h);
@@ -404,13 +411,15 @@ function draw() {
     rect(c.x - c.w / 2, c.y - c.h / 2, c.w, c.h);
   }
 
+  // --- Draw player blob ---
+  drawArcadeBlob(blob);
+
+  pop();
+
   // --- Update anxiety animation ---
   if (blob.anxietyTimer > 0) {
     blob.anxietyTimer--;
   }
-
-  // --- Draw player blob ---
-  drawArcadeBlob(blob);
 
   // --- HUD ---
   fill(100, 255, 100);
