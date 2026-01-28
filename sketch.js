@@ -76,7 +76,7 @@ function generateLevel() {
     });
 
     // Random hazards (spikes or monsters) - lower frequency for reachability
-    // Don't spawn hazards in first 3 depth levels
+    // Don't spawn spikes in first 3 depth levels
     if (depth >= 3) {
       if (random() < 0.18) {
         spikes.push({
@@ -85,20 +85,20 @@ function generateLevel() {
           size: 5,
         });
       }
+    }
 
-      if (random() < 0.12) {
-        let monsterX = platformX + platformWidth / 2;
-        monsters.push({
-          x: monsterX,
-          y: yPos - 20,
-          w: 16,
-          h: 16,
-          speed: 1 + (depth / 50) * 0.3,
-          direction: random() < 0.5 ? 1 : -1,
-          minX: max(20, platformX - 60),
-          maxX: min(width - 20, platformX + platformWidth + 60),
-        });
-      }
+    // Monsters spawn from beginning
+    if (random() < 0.12) {
+      monsters.push({
+        x: platformX + platformWidth / 2,
+        y: yPos - 14,
+        w: 12,
+        h: 12,
+        vx: random([-1, 1]),
+        platformY: yPos,
+        platformX: platformX,
+        platformW: platformWidth,
+      });
     }
 
     // Add collectible blob
@@ -266,8 +266,8 @@ function draw() {
       visited: false,
     });
 
-    // Add hazards to new platform (lower chance)
-    // Don't spawn hazards in first 3 depth levels
+    // Add hazards to new platform
+    // Don't spawn spikes in first 3 depth levels
     if (depth >= 3) {
       if (random() < 0.18) {
         spikes.push({
@@ -276,20 +276,20 @@ function draw() {
           size: 5,
         });
       }
+    }
 
-      if (random() < 0.12) {
-        let monsterX = platformX + platformWidth / 2;
-        monsters.push({
-          x: monsterX,
-          y: newY - 20,
-          w: 16,
-          h: 16,
-          speed: 1 + (depth / 50) * 0.3,
-          direction: random() < 0.5 ? 1 : -1,
-          minX: max(20, platformX - 60),
-          maxX: min(width - 20, platformX + platformWidth + 60),
-        });
-      }
+    // Monsters spawn from beginning
+    if (random() < 0.12) {
+      monsters.push({
+        x: platformX + platformWidth / 2,
+        y: newY - 14,
+        w: 12,
+        h: 12,
+        vx: random([-1, 1]),
+        platformY: newY,
+        platformX: platformX,
+        platformW: platformWidth,
+      });
     }
 
     if (random() < 0.3) {
@@ -368,11 +368,16 @@ function draw() {
   // --- Update monsters ---
   for (let i = monsters.length - 1; i >= 0; i--) {
     const m = monsters[i];
-    m.x += m.speed * m.direction;
-    if (m.x < m.minX || m.x > m.maxX) {
-      m.direction *= -1;
+    
+    // Simple side-to-side movement
+    m.x += m.vx * 0.8;
+    
+    // Turn around at platform edges
+    if (m.x < m.platformX + 10 || m.x > m.platformX + m.platformW - 10) {
+      m.vx *= -1;
     }
-
+    
+    // Check collision with blob
     if (
       blob.x < m.x + m.w &&
       blob.x + blob.w > m.x &&
@@ -380,14 +385,17 @@ function draw() {
       blob.y + blob.h > m.y
     ) {
       if (blob.hasMischief) {
-        m.direction *= -1;
+        // In mischief mode, knock monster away
+        m.vx *= -2;
       } else {
+        // Normal collision = game over
         gameOver = true;
         gameOverReason = "Hit by monster!";
       }
     }
-
-    if (m.y > height + 100) {
+    
+    // Remove if too far above
+    if (m.platformY < cameraY - 200) {
       monsters.splice(i, 1);
     }
   }
@@ -435,17 +443,13 @@ function draw() {
   fill(200, 50, 100);
   for (const m of monsters) {
     rect(m.x - m.w / 2, m.y - m.h / 2, m.w, m.h);
+    // Eyes
     fill(255);
-    rect(m.x - 6, m.y - 4, 4, 4);
-    rect(m.x + 2, m.y - 4, 4, 4);
+    rect(m.x - 4, m.y - 3, 2, 2);
+    rect(m.x + 2, m.y - 3, 2, 2);
+    // Mouth
     fill(0);
-    if (m.direction > 0) {
-      rect(m.x - 5, m.y - 3, 2, 2);
-      rect(m.x + 3, m.y - 3, 2, 2);
-    } else {
-      rect(m.x - 4, m.y - 3, 2, 2);
-      rect(m.x + 4, m.y - 3, 2, 2);
-    }
+    rect(m.x - 3, m.y + 2, 6, 1);
   }
 
   // --- Draw collectible blobs ---
